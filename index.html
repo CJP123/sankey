@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Two-Stage Water Mixing Sankey (ECharts)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1 { text-align: center; margin-bottom: 20px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; margin-bottom: 20px; }
+    .control { display: flex; flex-direction: column; align-items: flex-start; }
+    .control label { font-size: 0.9rem; margin-bottom: 4px; }
+    .control input, .control select { width: 80px; padding: 4px; }
+    #chart-container { width: 100%; height: 500px; }
+    #quality-display { text-align: center; margin-bottom: 15px; font-weight: bold; }
+    .legend { margin-top: 15px; text-align: center; }
+    .color-box { display: inline-block; width: 20px; height: 20px; vertical-align: middle; margin-right: 5px; }
+  </style>
+</head>
+<body>
+  <h1>Two-Stage Mixing Sankey</h1>
+  <div class="controls">
+    <div class="control">
+      <label for="hot">Hot Temp (°C)</label>
+      <input id="hot" type="number" value="80" step="1" min="50" max="80" />
+    </div>
+    <div class="control">
+      <label for="cold">Cold Temp (°C)</label>
+      <input id="cold" type="number" value="15" step="1" min="5" max="20" />
+    </div>
+    <div class="control">
+      <label for="mix">Intermediate Temp (°C)</label>
+      <select id="mix">
+        <option value="50">50</option>
+        <option value="55">55</option>
+      </select>
+    </div>
+    <div class="control">
+      <label for="target">Demand Temp (°C)</label>
+      <input id="target" type="number" value="42" step="1" min="38" max="50" />
+    </div>    
+    <div class="control">
+      <label for="flow">Demand Flow (LPM)</label>
+      <input id="flow" type="number" value="10" step="0.1" min="0" />
+    </div>
+  </div>
+  <div id="quality-display"></div>
+  <div id="chart-container"></div>
+  
+  <div class="legend">
+    <div style="display: inline-block; margin-right: 20px;">
+      <span class="color-box" style="background: hsl(0, 85%, 50%);"></span>
+      <span>Hot/Intermediate 80°C</span>
+    </div>
+    <div style="display: inline-block; margin-right: 20px;">
+      <span class="color-box" style="background: hsl(15, 85%, 50%);"></span>
+      <span>Hot/Intermediate 65°C</span>
+    </div>
+    <div style="display: inline-block; margin-right: 20px;">
+      <span class="color-box" style="background: hsl(30, 85%, 50%);"></span>
+      <span>Hot/Intermediate 50°C</span>
+    </div>
+    <div style="display: inline-block; margin-right: 20px;">
+      <span class="color-box" style="background: hsl(240, 85%, 50%);"></span>
+      <span>Cold</span>
+    </div>
+    <div style="display: inline-block; margin-right: 20px;">
+      <span class="color-box" style="background: hsl(120, 85%, 50%);"></span>
+      <span>Demand</span>
+    </div>
+  </div>
+
+  <script>
+    // Initialize the ECharts instance
+    var chart = echarts.init(document.getElementById('chart-container'));
+    
+    // Get all input controls
+    const inputs = ['flow', 'cold', 'mix', 'hot', 'target'];
+    inputs.forEach(id => document.getElementById(id)
+      .addEventListener('input', updateChart));
+    
+    // Initial chart draw
+    updateChart();
+    
+    // Update the chart when inputs change
+    function updateChart() {
+      // Get input values
+      const f  = +document.getElementById('flow').value;
+      const Tc = +document.getElementById('cold').value;
+      const Tm = +document.getElementById('mix').value;
+      const Th = +document.getElementById('hot').value;
+      const Tf = +document.getElementById('target').value;
+      
+      // Stage 1: produce intermediate mix at Tm
+      const interFlow = f * (Tf - Tc) / (Tm - Tc);
+      const hotFlow = interFlow * (Tm - Tc) / (Th - Tc);
+      const coldMix = interFlow - hotFlow;
+      
+      // Stage 2: produce final output at Tf
+      const mixToOut = interFlow;  // all intermediate goes to output
+      const coldOut = f - mixToOut;
+      
+      // Calculate hot quality
+      const hotQuality = (Th - Tc) / (Tf - Tc);
+      
+      // Display the hot quality in the UI
+      document.getElementById('quality-display').textContent = 
+        `Hot Quality: ${hotQuality.toFixed(3)} ((${Th}-${Tc})/(${Tf}-${Tc}))`;
+      
+      // Temperature-based color for hot water and intermediate
+      function getHotColor(temp) {
+        // Map temperature from range [50, 80] to hue range [30, 0]
+        // 80°C = brightest red (hue 0)
+        // 50°C = orange (hue 30)
+        const maxTemp = 80;
+        const minTemp = 50;
+        const range = maxTemp - minTemp;
+        const relativeTemp = (temp - minTemp) / range;
+        const hue = 30 - relativeTemp * 30;
+        return `hsl(${hue}, 85%, 50%)`;
+      }
+      
+      // Get colors for each node
+      const hotColor = getHotColor(Th);             // Dynamic red/orange based on hot temperature
+      const mixColor = getHotColor(Tm);             // Use same scale for mixing valve outlet
+      const coldColor = 'hsl(240, 85%, 50%)';       // Fixed blue for cold
+      const outColor = getHotColor(Tf);         // Fixed green for demand
+      
+      // Calculate total flows for each node
+      const hotNodeFlow = hotFlow;
+      const coldNodeFlow = coldMix + coldOut;
+      const mixNodeFlow = mixToOut;
+      const outNodeFlow = f;
+      
+      // Define node names with temperatures
+      const hotNode = `Hot (${Th}°C)`;
+      const coldNode = `Cold (${Tc}°C)`;
+      const mixNode = `Mixing valve outlet (${Tm}°C)`;
+      const outNode = `Demand (${Tf}°C)`;
+      
+      // ECharts Sankey configuration
+      const option = {
+        title: {
+          show: false
+        },
+        tooltip: {
+          trigger: 'item',
+          triggerOn: 'mousemove',
+          formatter: function(params) {
+            const value = params.value.toFixed(2);
+            return `${params.data.source} → ${params.data.target}: ${value} LPM`;
+          }
+        },
+        series: [{
+          type: 'sankey',
+          left: '10%',
+          right: '10%',
+          emphasis: {
+            focus: 'adjacency'
+          },
+          data: [
+            {
+              name: hotNode,
+              value: hotNodeFlow.toFixed(2),
+              itemStyle: {
+                color: hotColor
+              }
+            },
+            {
+              name: coldNode,
+              value: coldNodeFlow.toFixed(2),
+              itemStyle: {
+                color: coldColor
+              }
+            },
+            {
+              name: mixNode,
+              value: mixNodeFlow.toFixed(2),
+              itemStyle: {
+                color: mixColor
+              }
+            },
+            {
+              name: outNode,
+              value: outNodeFlow.toFixed(2),
+              itemStyle: {
+                color: outColor
+              }
+            }
+          ],
+          links: [
+            {
+              source: hotNode,
+              target: mixNode,
+              value: hotFlow,
+              lineStyle: {
+                color: hotColor,
+                opacity: 0.9
+              }
+            },
+            {
+              source: coldNode,
+              target: mixNode,
+              value: coldMix,
+              lineStyle: {
+                color: coldColor,
+                opacity: 0.9
+              }
+            },
+            {
+              source: mixNode,
+              target: outNode,
+              value: mixToOut,
+              lineStyle: {
+                color: mixColor,
+                opacity: 0.9
+              }
+            },
+            {
+              source: coldNode,
+              target: outNode,
+              value: coldOut,
+              lineStyle: {
+                color: coldColor,
+                opacity: 0.9
+              }
+            }
+          ],
+          label: {
+            position: 'right',
+            formatter: function(params) {
+              return params.name + '\n' + params.value + ' LPM';
+            },
+            fontWeight: 'bold'
+          },
+          nodeAlign: 'left',
+          layoutIterations: 0,
+          orient: 'horizontal',
+          levels: [
+            {
+              depth: 0,
+              itemStyle: {
+                borderWidth: 0
+              },
+              lineStyle: {
+                curveness: 0.5,
+                opacity: 0.7
+              }
+            },
+            {
+              depth: 1,
+              itemStyle: {
+                borderWidth: 0
+              },
+              lineStyle: {
+                curveness: 0.5,
+                opacity: 0.7
+              }
+            },
+            {
+              depth: 2,
+              itemStyle: {
+                borderWidth: 0
+              },
+              lineStyle: {
+                curveness: 0.5,
+                opacity: 0.7
+              }
+            }
+          ]
+        }]
+      };
+      
+      // Set the option and render the chart
+      chart.setOption(option, true);
+    }
+    
+    // Handle window resize
+    window.addEventListener('resize', function() {
+      chart.resize();
+    });
+  </script>
+</body>
+</html>

@@ -51,23 +51,19 @@
   <div class="legend">
     <div style="display: inline-block; margin-right: 20px;">
       <span class="color-box" style="background: hsl(0, 85%, 50%);"></span>
-      <span>Hot/Intermediate 80°C</span>
+      <span>80°C</span>
     </div>
     <div style="display: inline-block; margin-right: 20px;">
       <span class="color-box" style="background: hsl(15, 85%, 50%);"></span>
-      <span>Hot/Intermediate 65°C</span>
+      <span>65°C</span>
     </div>
     <div style="display: inline-block; margin-right: 20px;">
       <span class="color-box" style="background: hsl(30, 85%, 50%);"></span>
-      <span>Hot/Intermediate 50°C</span>
+      <span>50°C</span>
     </div>
     <div style="display: inline-block; margin-right: 20px;">
       <span class="color-box" style="background: hsl(240, 85%, 50%);"></span>
       <span>Cold</span>
-    </div>
-    <div style="display: inline-block; margin-right: 20px;">
-      <span class="color-box" style="background: hsl(120, 85%, 50%);"></span>
-      <span>Demand</span>
     </div>
   </div>
 
@@ -80,8 +76,28 @@
     inputs.forEach(id => document.getElementById(id)
       .addEventListener('input', updateChart));
     
+    updateHotLimits();
+    
     // Initial chart draw
     updateChart();
+    
+    // Function to update the hot water temperature min limit based on intermediate temp
+    function updateHotLimits() {
+      const mixTemp = +document.getElementById('mix').value;
+      document.getElementById('hot').min = mixTemp;
+      
+      // If current hot temp is less than mix temp, increase it
+      const hotTemp = +document.getElementById('hot').value;
+      if (hotTemp < mixTemp) {
+        document.getElementById('hot').value = mixTemp;
+      }
+    }
+    
+    // Add event listener to update hot limits when intermediate temp changes
+    document.getElementById('mix').addEventListener('change', function() {
+      updateHotLimits();
+      updateChart();
+    });
     
     // Update the chart when inputs change
     function updateChart() {
@@ -104,11 +120,10 @@
       // Calculate hot quality
       const hotQuality = (Th - Tc) / (Tf - Tc);
       
-      // Display the hot quality in the UI
-      document.getElementById('quality-display').textContent = 
-        `Hot Quality: ${hotQuality.toFixed(3)} ((${Th}-${Tc})/(${Tf}-${Tc}))`;
+      // Remove the quality display div content - we'll show it on the hot node instead
+      document.getElementById('quality-display').textContent = '';
       
-      // Temperature-based color for hot water and intermediate
+      // Temperature-based color for hot water, intermediate and demand
       function getHotColor(temp) {
         // Map temperature from range [50, 80] to hue range [30, 0]
         // 80°C = brightest red (hue 0)
@@ -124,8 +139,8 @@
       // Get colors for each node
       const hotColor = getHotColor(Th);             // Dynamic red/orange based on hot temperature
       const mixColor = getHotColor(Tm);             // Use same scale for mixing valve outlet
+      const outColor = getHotColor(Tf);             // Use same scale for demand output
       const coldColor = 'hsl(240, 85%, 50%)';       // Fixed blue for cold
-      const outColor = getHotColor(Tf);         // Fixed green for demand
       
       // Calculate total flows for each node
       const hotNodeFlow = hotFlow;
@@ -133,8 +148,8 @@
       const mixNodeFlow = mixToOut;
       const outNodeFlow = f;
       
-      // Define node names with temperatures
-      const hotNode = `Hot (${Th}°C)`;
+      // Node names with temperatures and quality for hot
+      const hotNode = `Hot (${Th}°C)\nQuality: ${hotQuality.toFixed(2)}`;
       const coldNode = `Cold (${Tc}°C)`;
       const mixNode = `Mixing valve outlet (${Tm}°C)`;
       const outNode = `Demand (${Tf}°C)`;

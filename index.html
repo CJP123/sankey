@@ -152,8 +152,9 @@
       const hotNode = `Hot (${Th}°C)\nQuality: ${hotQuality.toFixed(2)}`;
       const coldNode = `Cold (${Tc}°C)`;
       const mixNode = `Mixing valve outlet (${Tm}°C)`;
-      const outNode = `Demand (${Tf}°C)`;
-      
+      const demandKW = (f * (Tf - Tc) * 4.186 / 60).toFixed(2);
+      const outNode = `Demand (${Tf}°C)\n${demandKW} kW`;
+
       // ECharts Sankey configuration
       const option = {
         title: {

@@ -149,7 +149,7 @@
       const outNodeFlow = f;
       
       // Node names with temperatures and quality for hot
-      const hotNode = `Hot (${Th}°C)\nQuality: ${hotQuality.toFixed(2)}`;
+      const hotNode = `Hot (${Th}°C)`;
       const coldNode = `Cold (${Tc}°C)`;
       const mixNode = `Mixing valve outlet (${Tm}°C)`;
       const demandKW = (f * (Tf - Tc) * 4.186 / 60).toFixed(2);
